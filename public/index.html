@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LearnSnap - AI-Powered Learning from Any Source</title>
+    
+    <!-- Meta Tags -->
+    <meta name="description" content="Transform any content into interactive flashcards and summaries with AI. Upload files, add websites, or paste text - LearnSnap generates learning materials instantly.">
+    <meta name="keywords" content="AI learning, flashcards, spaced repetition, NotebookLM alternative, study app, open source">
+    <meta name="author" content="LearnSnap Team">
+    
+    <!-- Open Graph / Social Media -->
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="LearnSnap - AI-Powered Learning from Any Source">
+    <meta property="og:description" content="Transform any content into interactive flashcards and summaries with AI. Upload files, add websites, or paste text.">
+    <meta property="og:image" content="/icon-192.png">
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
+    
+    <!-- Fonts and Styles -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/brands.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app">
+        <!-- Header -->
+        <header class="header">
+            <div class="container">
+                <div class="header-content">
+                    <div class="logo">
+                        <i class="fas fa-zap"></i>
+                        <span>LearnSnap</span>
+                    </div>
+                    <nav class="nav">
+                        <a href="#" class="nav-link active" id="sourcesNav">Sources</a>
+                        <a href="#" class="nav-link" id="flashcardsNav">Flashcards</a>
+                        <a href="#" class="nav-link" id="decksNav">My Decks</a>
+                        <a href="#" class="nav-link" id="progressNav">Progress</a>
+                    </nav>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main">
+            <div class="container">
+                <!-- Hero Section -->
+                <section class="hero">
+                    <h1>Snap Learning from Any Source</h1>
+                    <p>Transform files, websites, and text into interactive flashcards and summaries with AI. Just like NotebookLM, but optimized for active learning.</p>
+                </section>
+
+                <!-- Add Sources Button -->
+                <section class="add-sources-section">
+                    <button class="add-sources-btn" id="addSourcesBtn">
+                        <i class="fas fa-plus"></i>
+                        Add Sources
+                    </button>
+                    <p class="add-sources-hint">Click to add files, websites, or text content</p>
+                </section>
+
+                <!-- Sources Management Section -->
+                <section class="sources-management-section" id="sourcesManagementSection" style="display: none;">
+                    <div class="sources-management-card">
+                        <div class="sources-header">
+                            <h3>📚 Your Sources</h3>
+                            <div class="sources-actions">
+                                <button class="action-btn secondary" id="addMoreSourcesBtn">
+                                    <i class="fas fa-plus"></i>
+                                    Add More
+                                </button>
+                                <button class="clear-sources-btn" id="clearAllSourcesBtn">
+                                    <i class="fas fa-trash"></i>
+                                    Clear All
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Source Selection List -->
+                        <div class="sources-selection-list" id="sourcesSelectionList">
+                            <!-- Dynamic source items with checkboxes will be inserted here -->
+                        </div>
+
+                        <!-- Content Preview -->
+                        <div class="content-preview-section">
+                            <h4>Content Preview</h4>
+                            <div class="preview-stats" id="previewStats">
+                                <span class="stat-item">
+                                    <i class="fas fa-file-alt"></i>
+                                    <span id="selectedSourcesCount">0</span> sources selected
+                                </span>
+                                <span class="stat-item">
+                                    <i class="fas fa-text-width"></i>
+                                    <span id="combinedContentSize">0</span> characters
+                                </span>
+                            </div>
+                            <div class="content-preview" id="contentPreview"></div>
+                        </div>
+                        
+                        <!-- Generation Options -->
+                        <div class="generation-options">
+                            <h4>Learning Options</h4>
+                            <div class="options-grid">
+                                <div class="option-group">
+                                    <label for="flashcardCount">Number of Flashcards:</label>
+                                    <select id="flashcardCount">
+                                        <option value="5">5 cards</option>
+                                        <option value="10" selected>10 cards</option>
+                                        <option value="15">15 cards</option>
+                                        <option value="20">20 cards</option>
+                                        <option value="25">25 cards</option>
+                                        <option value="30">30 cards</option>
+                                        <option value="40">40 cards</option>
+                                        <option value="50">50 cards</option>
+                                        <option value="75">75 cards</option>
+                                        <option value="100">100 cards</option>
+                                    </select>
+                                </div>
+                                
+                                <div class="option-group">
+                                    <label for="difficulty">Difficulty Level:</label>
+                                    <select id="difficulty">
+                                        <option value="easy">Easy</option>
+                                        <option value="medium" selected>Medium</option>
+                                        <option value="hard">Hard</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <!-- Custom Instructions -->
+                            <div class="custom-instructions-section">
+                                <h5>🎯 Custom Instructions (Optional)</h5>
+                                <textarea id="customInstructions" placeholder="Add specific instructions for how you want the flashcards to be generated. For example: 'Focus on definitions', 'Include practical examples', 'Make questions more challenging', 'Include formulas and calculations', etc." class="custom-instructions-input"></textarea>
+                                <small>Leave empty to use default AI instructions. This helps tailor the flashcards to your specific needs.</small>
+                            </div>
+
+                            <!-- Save Options -->
+                            <div class="save-options">
+                                <h5>💾 Save Options</h5>
+                                <label class="save-checkbox">
+                                    <input type="checkbox" id="saveAsDeck">
+                                    <span class="checkmark"></span>
+                                    Save as deck for spaced repetition learning (FSRS)
+                                </label>
+                                <div class="deck-name-input" id="deckNameInput" style="display: none;">
+                                    <input type="text" id="deckName" placeholder="Enter deck name..." maxlength="50">
+                                    <small>This will create a permanent deck you can study with spaced repetition</small>
+                                </div>
+                            </div>
+                            
+                            <div class="action-buttons">
+                                <button class="action-btn primary" id="generateFlashcardsBtn" disabled>
+                                    <i class="fas fa-magic"></i>
+                                    Generate Flashcards
+                                </button>
+                                <button class="action-btn secondary" id="generateSummaryBtn" disabled>
+                                    <i class="fas fa-file-alt"></i>
+                                    Generate Summary
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Add Sources Modal -->
+                <div class="modal-overlay" id="addSourcesModal" style="display: none;">
+                    <div class="modal-container">
+                        <div class="modal-header">
+                            <h3>📚 Add Learning Sources</h3>
+                            <button class="modal-close" id="closeModalBtn">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                        
+                        <div class="modal-content">
+                            <!-- Source Type Tabs -->
+                            <div class="source-tabs">
+                                <button class="tab-btn active" data-tab="file">
+                                    <i class="fas fa-file-upload"></i>
+                                    Upload File
+                                </button>
+                                <button class="tab-btn" data-tab="url">
+                                    <i class="fas fa-link"></i>
+                                    Website
+                                </button>
+                                <button class="tab-btn" data-tab="text">
+                                    <i class="fas fa-keyboard"></i>
+                                    Direct Text
+                                </button>
+                            </div>
+
+                            <!-- File Upload Tab -->
+                            <div class="tab-content active" id="fileTab">
+                                <div class="upload-area" id="uploadArea">
+                                    <div class="upload-icon">
+                                        <i class="fas fa-cloud-upload-alt"></i>
+                                    </div>
+                                    <h4>Upload Your Learning Material</h4>
+                                    <p>Drag and drop files here or click to browse</p>
+                                    <p class="file-types">Supports: PDF, Word documents, Text files</p>
+                                    <input type="file" id="fileInput" accept=".pdf,.docx,.txt" hidden>
+                                    <button class="upload-btn" id="uploadBtn">
+                                        <i class="fas fa-plus"></i>
+                                        Choose File
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- URL Input Tab -->
+                            <div class="tab-content" id="urlTab">
+                                <div class="url-input-area">
+                                    <div class="url-icon">
+                                        <i class="fas fa-globe"></i>
+                                    </div>
+                                    <h4>Add Website Content</h4>
+                                    <p>Paste any website URL to extract content</p>
+                                    <div class="url-input-group">
+                                        <input type="url" id="urlInput" placeholder="https://example.com" class="url-input">
+                                        <button class="url-btn" id="urlBtn">
+                                            <i class="fas fa-plus"></i>
+                                            Add URL
+                                        </button>
+                                    </div>
+                                    <div class="url-examples">
+                                        <p><strong>Examples:</strong></p>
+                                        <p>• Wikipedia: https://en.wikipedia.org/wiki/Machine_Learning</p>
+                                        <p>• Blog posts: https://blog.example.com/article</p>
+                                        <p>• Documentation: https://docs.example.com/guide</p>
+                                        <p>• News articles: https://news.example.com/story</p>
+                                        <p><strong>💡 Tips:</strong></p>
+                                        <p>• Works best with text-heavy content like articles and blogs</p>
+                                        <p>• If extraction fails, use "Direct Text" to paste content manually</p>
+                                        <p>• Academic papers and documentation work well</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Text Input Tab -->
+                            <div class="tab-content" id="textTab">
+                                <div class="text-input-area">
+                                    <div class="text-icon">
+                                        <i class="fas fa-edit"></i>
+                                    </div>
+                                    <h4>Paste or Type Your Content</h4>
+                                    <p>Add text content directly for processing</p>
+                                    <div class="text-input-group">
+                                        <input type="text" id="textTitle" placeholder="Give your content a title (optional)" class="text-title">
+                                        <textarea id="textInput" placeholder="Paste your content here... (articles, notes, transcripts, etc.)" class="text-input"></textarea>
+                                        <button class="text-btn" id="textBtn">
+                                            <i class="fas fa-plus"></i>
+                                            Add Text
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Processing Progress -->
+                            <div class="processing-progress" id="processingProgress" style="display: none;">
+                                <div class="progress-bar">
+                                    <div class="progress-fill" id="progressFill"></div>
+                                    <div class="progress-percent" id="progressPercent">0%</div>
+                                </div>
+                                <p id="progressText">Processing your source...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Save to Deck Modal -->
+                <div class="modal-overlay" id="saveToDeckModal" style="display: none;">
+                    <div class="modal-container">
+                        <div class="modal-header">
+                            <h3>💾 Save Flashcards to Deck</h3>
+                            <button class="modal-close" id="closeSaveToDeckModalBtn">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                        
+                        <div class="modal-content">
+                            <div class="save-deck-form">
+                                <div class="form-group">
+                                    <label for="saveDeckName">Deck Name:</label>
+                                    <input type="text" id="saveDeckName" placeholder="Enter deck name..." maxlength="50" class="deck-name-input">
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label for="saveDeckDescription">Description (Optional):</label>
+                                    <textarea id="saveDeckDescription" placeholder="Add a description for this deck..." maxlength="200" class="deck-description-input"></textarea>
+                                </div>
+                                
+                                <div class="deck-info">
+                                    <p><strong>Flashcards to save:</strong> <span id="saveFlashcardCount">0</span></p>
+                                    <p><strong>Study method:</strong> Spaced repetition with FSRS algorithm</p>
+                                    <small>Saved decks can be studied with intelligent scheduling for optimal retention.</small>
+                                </div>
+                                
+                                <div class="modal-actions">
+                                    <button class="action-btn secondary" id="cancelSaveToDeckBtn">
+                                        Cancel
+                                    </button>
+                                    <button class="action-btn primary" id="confirmSaveToDeckBtn">
+                                        <i class="fas fa-save"></i>
+                                        Save Deck
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Flashcards Section -->
+                <section class="flashcards-section" id="flashcardsSection" style="display: none;">
+                    <div class="flashcards-header">
+                        <h3>🎯 Your AI-Generated Flashcards</h3>
+                        <div class="flashcard-controls">
+                            <button class="control-btn" id="saveFlashcardsToDeckBtn">
+                                <i class="fas fa-save"></i>
+                                Save to Deck
+                            </button>
+                            <button class="control-btn" id="shuffleBtn">
+                                <i class="fas fa-random"></i>
+                                Shuffle
+                            </button>
+                            <button class="control-btn" id="resetBtn">
+                                <i class="fas fa-redo"></i>
+                                Reset
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="flashcard-container">
+                        <div class="flashcard" id="flashcard">
+                            <div class="flashcard-inner">
+                                <div class="flashcard-front">
+                                    <div class="card-content">
+                                        <h4>Question</h4>
+                                        <p id="questionText"></p>
+                                    </div>
+                                    <div class="card-hint">Click to reveal answer</div>
+                                </div>
+                                <div class="flashcard-back">
+                                    <div class="card-content">
+                                        <h4>Answer</h4>
+                                        <p id="answerText"></p>
+                                    </div>
+                                    <div class="card-hint">Click to see question</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="flashcard-navigation">
+                            <button class="nav-btn" id="prevBtn">
+                                <i class="fas fa-chevron-left"></i>
+                                Previous
+                            </button>
+                            <div class="card-counter">
+                                <span id="currentCard">1</span> / <span id="totalCards">10</span>
+                            </div>
+                            <button class="nav-btn" id="nextBtn">
+                                Next
+                                <i class="fas fa-chevron-right"></i>
+                            </button>
+                        </div>
+                        
+                        <div class="difficulty-feedback">
+                            <p>How well did you know this?</p>
+                            <div class="feedback-buttons">
+                                <button class="feedback-btn easy" data-difficulty="easy">
+                                    <i class="fas fa-smile"></i>
+                                    Easy
+                                </button>
+                                <button class="feedback-btn medium" data-difficulty="medium">
+                                    <i class="fas fa-meh"></i>
+                                    Medium
+                                </button>
+                                <button class="feedback-btn hard" data-difficulty="hard">
+                                    <i class="fas fa-frown"></i>
+                                    Hard
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Deck Library Section -->
+                <section class="deck-library-section" id="deckLibrarySection" style="display: none;">
+                    <div class="deck-library-header">
+                        <h3>📚 Your Deck Library</h3>
+                        <div class="library-controls">
+                            <button class="control-btn" id="refreshDecksBtn">
+                                <i class="fas fa-sync-alt"></i>
+                                Refresh
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="decks-grid" id="decksGrid">
+                        <!-- Dynamic deck cards will be inserted here -->
+                    </div>
+                </section>
+
+                <!-- Study Session Section -->
+                <section class="study-session-section" id="studySessionSection" style="display: none;">
+                    <div class="study-header">
+                        <h3 id="studyDeckTitle">🎯 Studying: Deck Name</h3>
+                        <div class="study-controls">
+                            <button class="control-btn" id="endStudyBtn">
+                                <i class="fas fa-stop"></i>
+                                End Session
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="study-progress">
+                        <div class="progress-bar-container">
+                            <div class="progress-bar-fill" id="studyProgressFill"></div>
+                        </div>
+                        <div class="progress-text">
+                            <span id="studyProgressText">Card 1 of 10</span>
+                            <span id="studyProgressPercent">10%</span>
+                        </div>
+                    </div>
+                    
+                    <div class="study-card-container">
+                        <div class="study-card" id="studyCard">
+                            <div class="study-card-inner">
+                                <div class="study-card-front">
+                                    <div class="card-content">
+                                        <h4>Question</h4>
+                                        <p id="studyQuestionText"></p>
+                                    </div>
+                                    <div class="card-hint">Click to reveal answer</div>
+                                </div>
+                                <div class="study-card-back">
+                                    <div class="card-content">
+                                        <h4>Answer</h4>
+                                        <p id="studyAnswerText"></p>
+                                    </div>
+                                    <div class="card-actions">
+                                        <p>How well did you know this?</p>
+                                        <div class="rating-buttons">
+                                            <button class="rating-btn again" data-rating="1">
+                                                <i class="fas fa-times"></i>
+                                                Again
+                                                <small>Forgot</small>
+                                            </button>
+                                            <button class="rating-btn hard" data-rating="2">
+                                                <i class="fas fa-frown"></i>
+                                                Hard
+                                                <small>Difficult</small>
+                                            </button>
+                                            <button class="rating-btn good" data-rating="3">
+                                                <i class="fas fa-check"></i>
+                                                Good
+                                                <small>Correct</small>
+                                            </button>
+                                            <button class="rating-btn easy" data-rating="4">
+                                                <i class="fas fa-smile"></i>
+                                                Easy
+                                                <small>Perfect</small>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Summary Section -->
+                <section class="summary-section" id="summarySection" style="display: none;">
+                    <div class="summary-card">
+                        <h3>📋 AI-Generated Summary</h3>
+                        <div class="summary-content" id="summaryContent"></div>
+                    </div>
+                </section>
+
+                <!-- Loading Overlay -->
+                <div class="loading-overlay" id="loadingOverlay" style="display: none;">
+                    <div class="loading-spinner">
+                        <div class="spinner"></div>
+                        <p id="loadingText">Processing your source...</p>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <div class="container">
+                <p>&copy; 2024 LearnSnap. Powered by Google Gemini .</p>
+            </div>
+        </footer>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html> 
