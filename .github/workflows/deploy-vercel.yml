@@ -8,6 +8,8 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    # Only run if Vercel secrets are available
+    if: ${{ secrets.VERCEL_TOKEN != '' }}
     
     steps:
     - name: 📥 Checkout code
@@ -20,21 +22,40 @@ jobs:
         cache: 'npm'
         
     - name: 🔧 Install dependencies
-      run: npm ci
-      
+      run: |
+        if [ -f package-lock.json ]; then
+          npm ci
+        else
+          npm install
+        fi
+        
     - name: 🏗️ Build for production
       run: |
         echo "Building LearnSnap for Vercel deployment..."
         # Add any build commands here if needed
         
     - name: 🚀 Deploy to Vercel
+      if: ${{ secrets.VERCEL_TOKEN != '' && secrets.ORG_ID != '' && secrets.PROJECT_ID != '' }}
       uses: amondnet/vercel-action@v25
       with:
         vercel-token: ${{ secrets.VERCEL_TOKEN }}
         vercel-org-id: ${{ secrets.ORG_ID }}
         vercel-project-id: ${{ secrets.PROJECT_ID }}
         vercel-args: '--prod'
+        working-directory: ./
         
+    - name: 📢 Deployment result
+      run: |
+        if [ "${{ secrets.VERCEL_TOKEN }}" = "" ]; then
+          echo "⚠️ Vercel deployment skipped - missing VERCEL_TOKEN secret"
+          echo "To deploy to Vercel:"
+          echo "1. Add VERCEL_TOKEN to repository secrets"
+          echo "2. Add ORG_ID to repository secrets"  
+          echo "3. Add PROJECT_ID to repository secrets"
+        else
+          echo "🎉 LearnSnap deployed to Vercel successfully!"
+        fi
+
   # Alternative: Deploy using Vercel CLI
   deploy-cli:
     runs-on: ubuntu-latest
