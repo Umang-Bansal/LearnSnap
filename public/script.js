@@ -292,25 +292,25 @@ class AILearningPlatform {
                     if (xhr.status === 200) {
                         try {
                             const result = JSON.parse(xhr.responseText);
-                            
-                            if (result.success) {
+            
+            if (result.success) {
                                 // Animate to completion
                                 this.progressFill.style.width = '100%';
                                 this.progressPercent.textContent = '100%';
                                 this.progressText.textContent = 'Upload complete!';
-                                
-                                setTimeout(() => {
-                                    this.addSource({
-                                        id: Date.now(),
-                                        title: result.filename,
-                                        type: result.sourceType,
-                                        content: result.fullText,
-                                        preview: result.extractedText
-                                    });
-                                    this.hideProcessing();
+                
+                setTimeout(() => {
+                    this.addSource({
+                        id: Date.now(),
+                        title: result.filename,
+                        type: result.sourceType,
+                        content: result.fullText,
+                        preview: result.extractedText
+                    });
+                    this.hideProcessing();
                                     resolve(result);
                                 }, 500);
-                            } else {
+            } else {
                                 reject(new Error(result.error || 'Upload failed'));
                             }
                         } catch (error) {

@@ -897,10 +897,16 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-app.listen(PORT, () => {
-  console.log(`🚀 LearnSnap running on http://localhost:${PORT}`);
-  console.log('⚡ Snap learning from any source with AI');
-  console.log('🤖 Powered by Google Gemini 2.0 Flash');
-  console.log('📚 Upload files, add URLs, or paste text to start learning!');
-  console.log('🌐 Supports: PDFs, Word docs, Websites, and direct text');
-}); 
+// Export app for Vercel deployment
+module.exports = app;
+
+// Only start server if not in Vercel environment
+if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`🚀 LearnSnap running on http://localhost:${PORT}`);
+    console.log('⚡ Snap learning from any source with AI');
+    console.log('🤖 Powered by Google Gemini 2.0 Flash');
+    console.log('📚 Upload files, add URLs, or paste text to start learning!');
+    console.log('🌐 Supports: PDFs, Word docs, Websites, and direct text');
+  });
+} 
