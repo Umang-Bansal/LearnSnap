@@ -52,17 +52,24 @@ app.use(express.json({ limit: config.requests.jsonLimit }));
 app.use(express.urlencoded(config.requests.urlencoded));
 app.use(express.static('public'));
 
-// Create uploads directory if it doesn't exist
+// Directory paths (for local development only)
 const uploadsDir = path.join(__dirname, 'uploads');
-fs.ensureDirSync(uploadsDir);
-
-// Create flashcards storage directories
 const flashcardsDir = path.join(__dirname, 'flashcards');
 const decksDir = path.join(flashcardsDir, 'decks');
 const studySessionsDir = path.join(flashcardsDir, 'sessions');
-fs.ensureDirSync(flashcardsDir);
-fs.ensureDirSync(decksDir);
-fs.ensureDirSync(studySessionsDir);
+
+// Only create directories in non-serverless environments
+const isServerless = process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.NETLIFY;
+if (!isServerless) {
+  try {
+    fs.ensureDirSync(uploadsDir);
+    fs.ensureDirSync(flashcardsDir);
+    fs.ensureDirSync(decksDir);
+    fs.ensureDirSync(studySessionsDir);
+  } catch (error) {
+    console.warn('Warning: Could not create directories (running in serverless mode?):', error.message);
+  }
+}
 
 // Initialize FSRS
 const fsrsParams = generatorParameters({ 
@@ -73,16 +80,18 @@ const fsrsParams = generatorParameters({
 });
 const fsrsScheduler = fsrs(fsrsParams);
 
-// Configure multer with config-based limits
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, uploadsDir);
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
-  }
-});
+// Configure multer for serverless compatibility
+const storage = isServerless ? 
+  multer.memoryStorage() : // Use memory storage in serverless
+  multer.diskStorage({     // Use disk storage locally
+    destination: (req, file, cb) => {
+      cb(null, uploadsDir);
+    },
+    filename: (req, file, cb) => {
+      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+      cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
+    }
+  });
 
 const upload = multer({
   storage: storage,
@@ -99,9 +108,16 @@ const upload = multer({
 });
 
 // Content processing functions
-async function extractTextFromPDF(filePath) {
+async function extractTextFromPDF(source) {
   try {
-    const dataBuffer = fs.readFileSync(filePath);
+    let dataBuffer;
+    if (Buffer.isBuffer(source)) {
+      // Serverless: source is already a buffer
+      dataBuffer = source;
+    } else {
+      // Local: source is a file path
+      dataBuffer = fs.readFileSync(source);
+    }
     const data = await pdfParse(dataBuffer);
     return data.text;
   } catch (error) {
@@ -109,18 +125,32 @@ async function extractTextFromPDF(filePath) {
   }
 }
 
-async function extractTextFromDocx(filePath) {
+async function extractTextFromDocx(source) {
   try {
-    const result = await mammoth.extractRawText({ path: filePath });
+    let options;
+    if (Buffer.isBuffer(source)) {
+      // Serverless: source is a buffer
+      options = { buffer: source };
+    } else {
+      // Local: source is a file path
+      options = { path: source };
+    }
+    const result = await mammoth.extractRawText(options);
     return result.value;
   } catch (error) {
     throw new Error('Failed to extract text from Word document: ' + error.message);
   }
 }
 
-async function extractTextFromTxt(filePath) {
+async function extractTextFromTxt(source) {
   try {
-    return fs.readFileSync(filePath, 'utf-8');
+    if (Buffer.isBuffer(source)) {
+      // Serverless: source is a buffer
+      return source.toString('utf-8');
+    } else {
+      // Local: source is a file path
+      return fs.readFileSync(source, 'utf-8');
+    }
   } catch (error) {
     throw new Error('Failed to read text file: ' + error.message);
   }
@@ -323,21 +353,30 @@ app.post('/upload', upload.single('file'), async (req, res) => {
       return res.status(400).json({ error: 'No file uploaded' });
     }
 
-    const filePath = req.file.path;
     const fileType = req.file.mimetype;
     let extractedText = '';
+    
+    // Determine source: buffer (serverless) or path (local)
+    const source = isServerless ? req.file.buffer : req.file.path;
 
     if (fileType === 'application/pdf') {
-      extractedText = await extractTextFromPDF(filePath);
+      extractedText = await extractTextFromPDF(source);
     } else if (fileType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
-      extractedText = await extractTextFromDocx(filePath);
+      extractedText = await extractTextFromDocx(source);
     } else if (fileType === 'text/plain') {
-      extractedText = await extractTextFromTxt(filePath);
+      extractedText = await extractTextFromTxt(source);
     } else if (fileType.startsWith('video/')) {
       extractedText = "Video processing feature coming soon! Please upload PDF, Word, or text files for now.";
     }
 
-    fs.removeSync(filePath);
+    // Only remove file in local environment
+    if (!isServerless && req.file.path) {
+      try {
+        fs.removeSync(req.file.path);
+      } catch (error) {
+        console.warn('Could not remove uploaded file:', error.message);
+      }
+    }
 
     res.json({
       success: true,
@@ -430,6 +469,19 @@ app.post('/generate-flashcards', checkApiKey, async (req, res) => {
     // If user wants to save as deck, create a deck with FSRS cards
     let deckId = null;
     if (saveAsDeck && deckName) {
+      if (isServerless) {
+        console.warn('Deck saving is not available in serverless mode');
+        // Return flashcards without saving deck
+        return res.json({ 
+          success: true, 
+          flashcards,
+          deckId: null,
+          deckName: null,
+          totalCards: flashcards.length,
+          warning: 'Deck saving is not available in serverless deployment. Flashcards generated successfully.'
+        });
+      }
+      
       deckId = uuidv4();
       const now = new Date();
       
@@ -477,10 +529,14 @@ app.post('/generate-flashcards', checkApiKey, async (req, res) => {
       };
       
       // Save deck to file
-      const deckPath = path.join(decksDir, `${deckId}.json`);
-      await fs.writeJson(deckPath, deck, { spaces: 2 });
-      
-      console.log(`Saved deck "${deckName}" with ${fsrsCards.length} cards to ${deckPath}`);
+      try {
+        const deckPath = path.join(decksDir, `${deckId}.json`);
+        await fs.writeJson(deckPath, deck, { spaces: 2 });
+        console.log(`Saved deck "${deckName}" with ${fsrsCards.length} cards to ${deckPath}`);
+      } catch (error) {
+        console.error('Error saving deck:', error);
+        // Continue without deck saving
+      }
     }
 
     res.json({ 
@@ -500,6 +556,13 @@ app.post('/generate-flashcards', checkApiKey, async (req, res) => {
 // Save existing flashcards as a deck
 app.post('/save-flashcards-to-deck', async (req, res) => {
   try {
+    if (isServerless) {
+      return res.status(503).json({ 
+        error: 'Deck saving is not available in serverless deployment',
+        message: 'This feature requires persistent storage. Please use the flashcards directly or deploy to a platform with persistent storage.'
+      });
+    }
+    
     const { flashcards, deckName, deckDescription, difficulty = 'medium' } = req.body;
     
     if (!flashcards || !Array.isArray(flashcards) || flashcards.length === 0) {
@@ -598,6 +661,14 @@ app.post('/generate-summary', checkApiKey, async (req, res) => {
 // Get all decks
 app.get('/api/decks', async (req, res) => {
   try {
+    if (isServerless) {
+      return res.json({ 
+        success: true, 
+        decks: [],
+        message: 'Deck management is not available in serverless deployment. Please use the flashcard generation feature directly.'
+      });
+    }
+    
     const deckFiles = await fs.readdir(decksDir);
     const decks = [];
     
@@ -640,6 +711,13 @@ app.get('/api/decks', async (req, res) => {
 // Get specific deck
 app.get('/api/decks/:id', async (req, res) => {
   try {
+    if (isServerless) {
+      return res.status(503).json({ 
+        error: 'Deck management is not available in serverless deployment',
+        message: 'Individual deck access requires persistent storage.'
+      });
+    }
+    
     const deckPath = path.join(decksDir, `${req.params.id}.json`);
     
     if (!await fs.pathExists(deckPath)) {
