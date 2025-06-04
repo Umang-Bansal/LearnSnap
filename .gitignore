@@ -123,3 +123,4 @@ Thumbs.db
 # LearnSnap specific
 *.deck
 *.session 
+.vercel

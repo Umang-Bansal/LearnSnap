@@ -17,16 +17,34 @@ const app = express();
 const PORT = config.server.port;
 
 // Initialize Gemini AI
+let genAI, model;
+let apiKeyMissing = false;
+
 if (!process.env.GEMINI_API_KEY) {
   console.error('❌ GEMINI_API_KEY environment variable is required');
-  console.log('📝 Please add your Google AI API key to a .env file:');
-  console.log('   GEMINI_API_KEY=your_api_key_here');
+  console.log('📝 Please add your Google AI API key to Vercel environment variables');
   console.log('🔗 Get your API key at: https://makersuite.google.com/app/apikey');
-  process.exit(1);
+  apiKeyMissing = true;
+} else {
+  try {
+    genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+    model = genAI.getGenerativeModel({ model: config.ai.model });
+  } catch (error) {
+    console.error('❌ Failed to initialize Gemini AI:', error.message);
+    apiKeyMissing = true;
+  }
 }
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: config.ai.model });
+// Middleware to check API key before AI operations
+const checkApiKey = (req, res, next) => {
+  if (apiKeyMissing) {
+    return res.status(500).json({ 
+      error: 'GEMINI_API_KEY is not configured. Please add your Google AI API key to the environment variables.',
+      setup_url: 'https://aistudio.google.com/app/apikey'
+    });
+  }
+  next();
+};
 
 // Middleware with increased limits
 app.use(cors());
@@ -399,7 +417,7 @@ app.post('/process-text', async (req, res) => {
   }
 });
 
-app.post('/generate-flashcards', async (req, res) => {
+app.post('/generate-flashcards', checkApiKey, async (req, res) => {
   try {
     const { content, count, difficulty, type, saveAsDeck, deckName, customInstructions } = req.body;
     
@@ -558,7 +576,7 @@ app.post('/save-flashcards-to-deck', async (req, res) => {
   }
 });
 
-app.post('/generate-summary', async (req, res) => {
+app.post('/generate-summary', checkApiKey, async (req, res) => {
   try {
     const { content } = req.body;
     
@@ -892,9 +910,51 @@ app.get('/api/study/:sessionId/stats', async (req, res) => {
   }
 });
 
+// Setup status endpoint
+app.get('/api/status', (req, res) => {
+  res.json({
+    success: true,
+    apiKeyConfigured: !apiKeyMissing,
+    message: apiKeyMissing ? 
+      'Please configure GEMINI_API_KEY in environment variables' : 
+      'System ready'
+  });
+});
+
 // Serve the main page
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  if (apiKeyMissing) {
+    // Send a setup page instead of the main app if API key is missing
+    res.send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>LearnSnap - Setup Required</title>
+        <style>
+          body { font-family: Arial, sans-serif; max-width: 600px; margin: 100px auto; padding: 20px; text-align: center; }
+          .error { color: #e74c3c; }
+          .code { background: #f8f9fa; padding: 15px; border-radius: 5px; margin: 20px 0; }
+          a { color: #3498db; text-decoration: none; }
+        </style>
+      </head>
+      <body>
+        <h1>🚀 LearnSnap Setup Required</h1>
+        <p class="error">❌ GEMINI_API_KEY environment variable is missing</p>
+        <h3>To complete setup:</h3>
+        <ol>
+          <li>Get your API key from <a href="https://aistudio.google.com/app/apikey" target="_blank">Google AI Studio</a></li>
+          <li>Go to your <a href="https://vercel.com/dashboard" target="_blank">Vercel Dashboard</a></li>
+          <li>Select this project → Settings → Environment Variables</li>
+          <li>Add: <code>GEMINI_API_KEY</code> with your API key</li>
+          <li>Redeploy the application</li>
+        </ol>
+        <p>Once configured, your AI-powered flashcard platform will be ready! 🎉</p>
+      </body>
+      </html>
+    `);
+  } else {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  }
 });
 
 // Export app for Vercel deployment
