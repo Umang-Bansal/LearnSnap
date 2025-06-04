@@ -17,34 +17,16 @@ const app = express();
 const PORT = config.server.port;
 
 // Initialize Gemini AI
-let genAI, model;
-let apiKeyMissing = false;
-
 if (!process.env.GEMINI_API_KEY) {
   console.error('❌ GEMINI_API_KEY environment variable is required');
-  console.log('📝 Please add your Google AI API key to Vercel environment variables');
+  console.log('📝 Please add your Google AI API key to a .env file:');
+  console.log('   GEMINI_API_KEY=your_api_key_here');
   console.log('🔗 Get your API key at: https://makersuite.google.com/app/apikey');
-  apiKeyMissing = true;
-} else {
-  try {
-    genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    model = genAI.getGenerativeModel({ model: config.ai.model });
-  } catch (error) {
-    console.error('❌ Failed to initialize Gemini AI:', error.message);
-    apiKeyMissing = true;
-  }
+  process.exit(1);
 }
 
-// Middleware to check API key before AI operations
-const checkApiKey = (req, res, next) => {
-  if (apiKeyMissing) {
-    return res.status(500).json({ 
-      error: 'GEMINI_API_KEY is not configured. Please add your Google AI API key to the environment variables.',
-      setup_url: 'https://aistudio.google.com/app/apikey'
-    });
-  }
-  next();
-};
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const model = genAI.getGenerativeModel({ model: config.ai.model });
 
 // Middleware with increased limits
 app.use(cors());
@@ -52,24 +34,17 @@ app.use(express.json({ limit: config.requests.jsonLimit }));
 app.use(express.urlencoded(config.requests.urlencoded));
 app.use(express.static('public'));
 
-// Directory paths (for local development only)
+// Create uploads directory if it doesn't exist
 const uploadsDir = path.join(__dirname, 'uploads');
+fs.ensureDirSync(uploadsDir);
+
+// Create flashcards storage directories
 const flashcardsDir = path.join(__dirname, 'flashcards');
 const decksDir = path.join(flashcardsDir, 'decks');
 const studySessionsDir = path.join(flashcardsDir, 'sessions');
-
-// Only create directories in non-serverless environments
-const isServerless = process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.NETLIFY;
-if (!isServerless) {
-  try {
-    fs.ensureDirSync(uploadsDir);
-    fs.ensureDirSync(flashcardsDir);
-    fs.ensureDirSync(decksDir);
-    fs.ensureDirSync(studySessionsDir);
-  } catch (error) {
-    console.warn('Warning: Could not create directories (running in serverless mode?):', error.message);
-  }
-}
+fs.ensureDirSync(flashcardsDir);
+fs.ensureDirSync(decksDir);
+fs.ensureDirSync(studySessionsDir);
 
 // Initialize FSRS
 const fsrsParams = generatorParameters({ 
@@ -80,18 +55,16 @@ const fsrsParams = generatorParameters({
 });
 const fsrsScheduler = fsrs(fsrsParams);
 
-// Configure multer for serverless compatibility
-const storage = isServerless ? 
-  multer.memoryStorage() : // Use memory storage in serverless
-  multer.diskStorage({     // Use disk storage locally
-    destination: (req, file, cb) => {
-      cb(null, uploadsDir);
-    },
-    filename: (req, file, cb) => {
-      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-      cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
-    }
-  });
+// Configure multer with config-based limits
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, uploadsDir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
+  }
+});
 
 const upload = multer({
   storage: storage,
@@ -108,16 +81,9 @@ const upload = multer({
 });
 
 // Content processing functions
-async function extractTextFromPDF(source) {
+async function extractTextFromPDF(filePath) {
   try {
-    let dataBuffer;
-    if (Buffer.isBuffer(source)) {
-      // Serverless: source is already a buffer
-      dataBuffer = source;
-    } else {
-      // Local: source is a file path
-      dataBuffer = fs.readFileSync(source);
-    }
+    const dataBuffer = fs.readFileSync(filePath);
     const data = await pdfParse(dataBuffer);
     return data.text;
   } catch (error) {
@@ -125,32 +91,18 @@ async function extractTextFromPDF(source) {
   }
 }
 
-async function extractTextFromDocx(source) {
+async function extractTextFromDocx(filePath) {
   try {
-    let options;
-    if (Buffer.isBuffer(source)) {
-      // Serverless: source is a buffer
-      options = { buffer: source };
-    } else {
-      // Local: source is a file path
-      options = { path: source };
-    }
-    const result = await mammoth.extractRawText(options);
+    const result = await mammoth.extractRawText({ path: filePath });
     return result.value;
   } catch (error) {
     throw new Error('Failed to extract text from Word document: ' + error.message);
   }
 }
 
-async function extractTextFromTxt(source) {
+async function extractTextFromTxt(filePath) {
   try {
-    if (Buffer.isBuffer(source)) {
-      // Serverless: source is a buffer
-      return source.toString('utf-8');
-    } else {
-      // Local: source is a file path
-      return fs.readFileSync(source, 'utf-8');
-    }
+    return fs.readFileSync(filePath, 'utf-8');
   } catch (error) {
     throw new Error('Failed to read text file: ' + error.message);
   }
@@ -353,30 +305,21 @@ app.post('/upload', upload.single('file'), async (req, res) => {
       return res.status(400).json({ error: 'No file uploaded' });
     }
 
+    const filePath = req.file.path;
     const fileType = req.file.mimetype;
     let extractedText = '';
-    
-    // Determine source: buffer (serverless) or path (local)
-    const source = isServerless ? req.file.buffer : req.file.path;
 
     if (fileType === 'application/pdf') {
-      extractedText = await extractTextFromPDF(source);
+      extractedText = await extractTextFromPDF(filePath);
     } else if (fileType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
-      extractedText = await extractTextFromDocx(source);
+      extractedText = await extractTextFromDocx(filePath);
     } else if (fileType === 'text/plain') {
-      extractedText = await extractTextFromTxt(source);
+      extractedText = await extractTextFromTxt(filePath);
     } else if (fileType.startsWith('video/')) {
       extractedText = "Video processing feature coming soon! Please upload PDF, Word, or text files for now.";
     }
 
-    // Only remove file in local environment
-    if (!isServerless && req.file.path) {
-      try {
-        fs.removeSync(req.file.path);
-      } catch (error) {
-        console.warn('Could not remove uploaded file:', error.message);
-      }
-    }
+    fs.removeSync(filePath);
 
     res.json({
       success: true,
@@ -456,7 +399,7 @@ app.post('/process-text', async (req, res) => {
   }
 });
 
-app.post('/generate-flashcards', checkApiKey, async (req, res) => {
+app.post('/generate-flashcards', async (req, res) => {
   try {
     const { content, count, difficulty, type, saveAsDeck, deckName, customInstructions } = req.body;
     
@@ -469,19 +412,6 @@ app.post('/generate-flashcards', checkApiKey, async (req, res) => {
     // If user wants to save as deck, create a deck with FSRS cards
     let deckId = null;
     if (saveAsDeck && deckName) {
-      if (isServerless) {
-        console.warn('Deck saving is not available in serverless mode');
-        // Return flashcards without saving deck
-        return res.json({ 
-          success: true, 
-          flashcards,
-          deckId: null,
-          deckName: null,
-          totalCards: flashcards.length,
-          warning: 'Deck saving is not available in serverless deployment. Flashcards generated successfully.'
-        });
-      }
-      
       deckId = uuidv4();
       const now = new Date();
       
@@ -529,14 +459,10 @@ app.post('/generate-flashcards', checkApiKey, async (req, res) => {
       };
       
       // Save deck to file
-      try {
-        const deckPath = path.join(decksDir, `${deckId}.json`);
-        await fs.writeJson(deckPath, deck, { spaces: 2 });
-        console.log(`Saved deck "${deckName}" with ${fsrsCards.length} cards to ${deckPath}`);
-      } catch (error) {
-        console.error('Error saving deck:', error);
-        // Continue without deck saving
-      }
+      const deckPath = path.join(decksDir, `${deckId}.json`);
+      await fs.writeJson(deckPath, deck, { spaces: 2 });
+      
+      console.log(`Saved deck "${deckName}" with ${fsrsCards.length} cards to ${deckPath}`);
     }
 
     res.json({ 
@@ -556,13 +482,6 @@ app.post('/generate-flashcards', checkApiKey, async (req, res) => {
 // Save existing flashcards as a deck
 app.post('/save-flashcards-to-deck', async (req, res) => {
   try {
-    if (isServerless) {
-      return res.status(503).json({ 
-        error: 'Deck saving is not available in serverless deployment',
-        message: 'This feature requires persistent storage. Please use the flashcards directly or deploy to a platform with persistent storage.'
-      });
-    }
-    
     const { flashcards, deckName, deckDescription, difficulty = 'medium' } = req.body;
     
     if (!flashcards || !Array.isArray(flashcards) || flashcards.length === 0) {
@@ -639,7 +558,7 @@ app.post('/save-flashcards-to-deck', async (req, res) => {
   }
 });
 
-app.post('/generate-summary', checkApiKey, async (req, res) => {
+app.post('/generate-summary', async (req, res) => {
   try {
     const { content } = req.body;
     
@@ -661,14 +580,6 @@ app.post('/generate-summary', checkApiKey, async (req, res) => {
 // Get all decks
 app.get('/api/decks', async (req, res) => {
   try {
-    if (isServerless) {
-      return res.json({ 
-        success: true, 
-        decks: [],
-        message: 'Deck management is not available in serverless deployment. Please use the flashcard generation feature directly.'
-      });
-    }
-    
     const deckFiles = await fs.readdir(decksDir);
     const decks = [];
     
@@ -711,13 +622,6 @@ app.get('/api/decks', async (req, res) => {
 // Get specific deck
 app.get('/api/decks/:id', async (req, res) => {
   try {
-    if (isServerless) {
-      return res.status(503).json({ 
-        error: 'Deck management is not available in serverless deployment',
-        message: 'Individual deck access requires persistent storage.'
-      });
-    }
-    
     const deckPath = path.join(decksDir, `${req.params.id}.json`);
     
     if (!await fs.pathExists(deckPath)) {
@@ -988,63 +892,15 @@ app.get('/api/study/:sessionId/stats', async (req, res) => {
   }
 });
 
-// Setup status endpoint
-app.get('/api/status', (req, res) => {
-  res.json({
-    success: true,
-    apiKeyConfigured: !apiKeyMissing,
-    message: apiKeyMissing ? 
-      'Please configure GEMINI_API_KEY in environment variables' : 
-      'System ready'
-  });
-});
-
 // Serve the main page
 app.get('/', (req, res) => {
-  if (apiKeyMissing) {
-    // Send a setup page instead of the main app if API key is missing
-    res.send(`
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>LearnSnap - Setup Required</title>
-        <style>
-          body { font-family: Arial, sans-serif; max-width: 600px; margin: 100px auto; padding: 20px; text-align: center; }
-          .error { color: #e74c3c; }
-          .code { background: #f8f9fa; padding: 15px; border-radius: 5px; margin: 20px 0; }
-          a { color: #3498db; text-decoration: none; }
-        </style>
-      </head>
-      <body>
-        <h1>🚀 LearnSnap Setup Required</h1>
-        <p class="error">❌ GEMINI_API_KEY environment variable is missing</p>
-        <h3>To complete setup:</h3>
-        <ol>
-          <li>Get your API key from <a href="https://aistudio.google.com/app/apikey" target="_blank">Google AI Studio</a></li>
-          <li>Go to your <a href="https://vercel.com/dashboard" target="_blank">Vercel Dashboard</a></li>
-          <li>Select this project → Settings → Environment Variables</li>
-          <li>Add: <code>GEMINI_API_KEY</code> with your API key</li>
-          <li>Redeploy the application</li>
-        </ol>
-        <p>Once configured, your AI-powered flashcard platform will be ready! 🎉</p>
-      </body>
-      </html>
-    `);
-  } else {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
-  }
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Export app for Vercel deployment
-module.exports = app;
-
-// Only start server if not in Vercel environment
-if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
-  app.listen(PORT, () => {
-    console.log(`🚀 LearnSnap running on http://localhost:${PORT}`);
-    console.log('⚡ Snap learning from any source with AI');
-    console.log('🤖 Powered by Google Gemini 2.0 Flash');
-    console.log('📚 Upload files, add URLs, or paste text to start learning!');
-    console.log('🌐 Supports: PDFs, Word docs, Websites, and direct text');
-  });
-} 
+app.listen(PORT, () => {
+  console.log(`🚀 LearnSnap running on http://localhost:${PORT}`);
+  console.log('⚡ Snap learning from any source with AI');
+  console.log('🤖 Powered by Google Gemini 2.0 Flash');
+  console.log('📚 Upload files, add URLs, or paste text to start learning!');
+  console.log('🌐 Supports: PDFs, Word docs, Websites, and direct text');
+}); 

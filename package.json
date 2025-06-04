@@ -3,12 +3,8 @@
   "version": "1.0.0",
   "description": "Snap learning from any source with AI-powered flashcards and summaries. Transform files, websites, and text into interactive learning materials instantly.",
   "main": "server.js",
-  "engines": {
-    "node": ">=18.0.0"
-  },
   "scripts": {
     "start": "node server.js",
-    "build": "echo 'Build completed'",
     "dev": "nodemon server.js",
     "setup": "node setup.js",
     "test": "echo \"Error: no test specified\" && exit 1"
